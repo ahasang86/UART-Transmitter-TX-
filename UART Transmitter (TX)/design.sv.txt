@@ -1,0 +1,50 @@
+// Code your design here
+module uart_tx #(
+    parameter CLK_FREQ = 50000000,
+    parameter BAUD_RATE = 9600
+)(
+    input  logic clk,
+    input  logic rst,
+    input  logic tx_start,
+    input  logic [7:0] data_in,
+    output logic tx,
+    output logic busy
+);
+
+    localparam integer BAUD_TICK = CLK_FREQ / BAUD_RATE;
+
+    logic [12:0] baud_cnt;
+    logic baud_tick;
+    logic [3:0] bit_index;
+    logic [9:0] shift_reg;
+
+    assign baud_tick = (baud_cnt == BAUD_TICK - 1);
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst)
+            baud_cnt <= 0;
+        else if (busy)
+            baud_cnt <= baud_tick ? 0 : baud_cnt + 1;
+        else
+            baud_cnt <= 0;
+    end
+
+    always_ff @(posedge clk or posedge rst) begin
+        if (rst) begin
+            busy <= 0;
+            tx <= 1;
+            bit_index <= 0;
+        end else begin
+            if (tx_start && !busy) begin
+                busy <= 1;
+                shift_reg <= {1'b1, data_in, 1'b0};
+                bit_index <= 0;
+            end else if (busy && baud_tick) begin
+                tx <= shift_reg[bit_index];
+                bit_index <= bit_index + 1;
+                if (bit_index == 9)
+                    busy <= 0;
+            end
+        end
+    end
+endmodule
